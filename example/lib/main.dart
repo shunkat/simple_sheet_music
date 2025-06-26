@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:simple_sheet_music/simple_sheet_music.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Preload all fonts for immediate rendering without loading indicators
+  await SimpleSheetMusicFonts.preloadAllFonts();
+  
   runApp(const MyApp());
 }
 

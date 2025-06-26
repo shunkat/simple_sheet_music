@@ -1,16 +1,14 @@
-import 'dart:convert';
 import 'dart:core';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:simple_sheet_music/src/glyph_metadata.dart';
 import 'package:simple_sheet_music/src/glyph_path.dart';
 import 'package:simple_sheet_music/src/measure/measure.dart';
 import 'package:simple_sheet_music/src/music_objects/clef/clef_type.dart';
 import 'package:simple_sheet_music/src/sheet_music_metrics.dart';
 import 'package:simple_sheet_music/src/sheet_music_renderer.dart';
-import 'package:xml/xml.dart';
 
+import 'font_manager.dart';
 import 'font_types.dart';
 import 'music_objects/interface/musical_symbol.dart';
 import 'music_objects/key_signature/keysignature_type.dart';
@@ -67,36 +65,64 @@ class SimpleSheetMusic extends StatefulWidget {
 /// This class manages the state of the SimpleSheetMusic widget and handles the initialization,
 /// font asset loading, and building of the widget.
 class SimpleSheetMusicState extends State<SimpleSheetMusic> {
-  late final GlyphPaths glyphPath;
-  late final GlyphMetadata metadata;
-  late final Future<void> _future;
+  late final FontManager _fontManager;
+  late final Future<void> _fontPreloadFuture;
 
   FontType get fontType => widget.fontType;
 
   @override
   void initState() {
-    _future = load();
     super.initState();
-  }
-
-  Future<void> load() async {
-    final xml = await rootBundle.loadString(fontType.svgPath);
-    final document = XmlDocument.parse(xml);
-    final allGlyphs = document.findAllElements('glyph').toSet();
-    glyphPath = GlyphPaths(allGlyphs);
-    final json = await rootBundle.loadString(fontType.metadataPath);
-    metadata = GlyphMetadata(jsonDecode(json) as Map<String, dynamic>);
+    _fontManager = FontManager();
+    _fontPreloadFuture = _fontManager.preloadFont(fontType);
   }
 
   @override
   Widget build(BuildContext context) {
     final targetSize = Size(widget.width, widget.height);
-    return FutureBuilder(
-      future: _future,
+    
+    // Check if font is already loaded for immediate synchronous rendering
+    if (_fontManager.isFontLoaded(fontType)) {
+      final glyphPath = _fontManager.getGlyphPaths(fontType);
+      final metadata = _fontManager.getGlyphMetadata(fontType);
+      
+      final metricsBuilder = SheetMusicMetrics(
+        widget.measures,
+        widget.initialClefType,
+        widget.initialKeySignatureType,
+        metadata,
+        glyphPath,
+      );
+      final layout = SheetMusicLayout(
+        metricsBuilder,
+        widget.lineColor,
+        widgetWidth: widget.width,
+        widgetHeight: widget.height,
+      );
+      return CustomPaint(
+        size: targetSize,
+        painter: SheetMusicRenderer(layout),
+      );
+    }
+    
+    // If font is not loaded, use async loading with FutureBuilder
+    return FutureBuilder<void>(
+      future: _fontPreloadFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
+        
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Error loading font: ${snapshot.error}'),
+          );
+        }
+        
+        // Now we can access fonts synchronously
+        final glyphPath = _fontManager.getGlyphPaths(fontType);
+        final metadata = _fontManager.getGlyphMetadata(fontType);
+        
         final metricsBuilder = SheetMusicMetrics(
           widget.measures,
           widget.initialClefType,
