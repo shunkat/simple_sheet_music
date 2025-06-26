@@ -92,7 +92,8 @@ class SimpleSheetMusicDemoState extends State {
               border: Border.all(),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: SimpleSheetMusic(
+            // Using the immediate constructor since fonts are preloaded at app startup
+            child: SimpleSheetMusic.immediate(
               height: height,
               width: width,
               measures: [measure1, measure2, measure3],

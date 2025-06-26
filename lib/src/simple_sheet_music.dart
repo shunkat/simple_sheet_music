@@ -21,6 +21,9 @@ typedef OnTapMusicObjectCallback = void Function(
 
 /// The `SimpleSheetMusic` widget is used to display sheet music.
 /// It takes a list of `Staff` objects, an initial clef, and other optional parameters to customize the appearance of the sheet music.
+/// 
+/// For optimal performance, preload fonts using `SimpleSheetMusicFonts.preloadAllFonts()` 
+/// at app startup to enable immediate rendering without loading indicators.
 class SimpleSheetMusic extends StatefulWidget {
   const SimpleSheetMusic({
     super.key,
@@ -32,6 +35,80 @@ class SimpleSheetMusic extends StatefulWidget {
     this.lineColor = Colors.black54,
     this.fontType = FontType.bravura,
   });
+
+  /// Creates a SimpleSheetMusic widget that ensures fonts are preloaded.
+  /// 
+  /// This constructor returns a Future that resolves to the widget once fonts are loaded.
+  /// Use this for guaranteed synchronous rendering without loading indicators.
+  /// 
+  /// Example:
+  /// ```dart
+  /// final widget = await SimpleSheetMusic.withPreloadedFonts(
+  ///   measures: measures,
+  ///   fontType: FontType.bravura,
+  /// );
+  /// ```
+  static Future<SimpleSheetMusic> withPreloadedFonts({
+    Key? key,
+    required List<Measure> measures,
+    ClefType initialClefType = ClefType.treble,
+    KeySignatureType initialKeySignatureType = KeySignatureType.cMajor,
+    double height = 400.0,
+    double width = 400.0,
+    Color lineColor = Colors.black54,
+    FontType fontType = FontType.bravura,
+  }) async {
+    final fontManager = FontManager();
+    await fontManager.preloadFont(fontType);
+    
+    return SimpleSheetMusic(
+      key: key,
+      measures: measures,
+      initialClefType: initialClefType,
+      initialKeySignatureType: initialKeySignatureType,
+      height: height,
+      width: width,
+      lineColor: lineColor,
+      fontType: fontType,
+    );
+  }
+
+  /// Creates a SimpleSheetMusic widget assuming fonts are already loaded.
+  /// 
+  /// This method creates the widget immediately without checking if fonts are loaded.
+  /// Use only when you're certain fonts have been preloaded via `SimpleSheetMusicFonts.preloadAllFonts()`.
+  /// 
+  /// If fonts aren't loaded, the widget will fall back to async loading with a loading indicator.
+  /// 
+  /// Example:
+  /// ```dart
+  /// // After calling SimpleSheetMusicFonts.preloadAllFonts() at app startup
+  /// final widget = SimpleSheetMusic.immediate(
+  ///   measures: measures,
+  ///   fontType: FontType.bravura,
+  /// );
+  /// ```
+  static SimpleSheetMusic immediate({
+    Key? key,
+    required List<Measure> measures,
+    ClefType initialClefType = ClefType.treble,
+    KeySignatureType initialKeySignatureType = KeySignatureType.cMajor,
+    double height = 400.0,
+    double width = 400.0,
+    Color lineColor = Colors.black54,
+    FontType fontType = FontType.bravura,
+  }) {
+    return SimpleSheetMusic(
+      key: key,
+      measures: measures,
+      initialClefType: initialClefType,
+      initialKeySignatureType: initialKeySignatureType,
+      height: height,
+      width: width,
+      lineColor: lineColor,
+      fontType: fontType,
+    );
+  }
 
   /// The list of measures to be displayed.
   final List<Measure> measures;
@@ -83,26 +160,7 @@ class SimpleSheetMusicState extends State<SimpleSheetMusic> {
     
     // Check if font is already loaded for immediate synchronous rendering
     if (_fontManager.isFontLoaded(fontType)) {
-      final glyphPath = _fontManager.getGlyphPaths(fontType);
-      final metadata = _fontManager.getGlyphMetadata(fontType);
-      
-      final metricsBuilder = SheetMusicMetrics(
-        widget.measures,
-        widget.initialClefType,
-        widget.initialKeySignatureType,
-        metadata,
-        glyphPath,
-      );
-      final layout = SheetMusicLayout(
-        metricsBuilder,
-        widget.lineColor,
-        widgetWidth: widget.width,
-        widgetHeight: widget.height,
-      );
-      return CustomPaint(
-        size: targetSize,
-        painter: SheetMusicRenderer(layout),
-      );
+      return _buildSheetMusic(targetSize);
     }
     
     // If font is not loaded, use async loading with FutureBuilder
@@ -119,28 +177,31 @@ class SimpleSheetMusicState extends State<SimpleSheetMusic> {
           );
         }
         
-        // Now we can access fonts synchronously
-        final glyphPath = _fontManager.getGlyphPaths(fontType);
-        final metadata = _fontManager.getGlyphMetadata(fontType);
-        
-        final metricsBuilder = SheetMusicMetrics(
-          widget.measures,
-          widget.initialClefType,
-          widget.initialKeySignatureType,
-          metadata,
-          glyphPath,
-        );
-        final layout = SheetMusicLayout(
-          metricsBuilder,
-          widget.lineColor,
-          widgetWidth: widget.width,
-          widgetHeight: widget.height,
-        );
-        return CustomPaint(
-          size: targetSize,
-          painter: SheetMusicRenderer(layout),
-        );
+        return _buildSheetMusic(targetSize);
       },
+    );
+  }
+
+  Widget _buildSheetMusic(Size targetSize) {
+    final glyphPath = _fontManager.getGlyphPaths(fontType);
+    final metadata = _fontManager.getGlyphMetadata(fontType);
+    
+    final metricsBuilder = SheetMusicMetrics(
+      widget.measures,
+      widget.initialClefType,
+      widget.initialKeySignatureType,
+      metadata,
+      glyphPath,
+    );
+    final layout = SheetMusicLayout(
+      metricsBuilder,
+      widget.lineColor,
+      widgetWidth: widget.width,
+      widgetHeight: widget.height,
+    );
+    return CustomPaint(
+      size: targetSize,
+      painter: SheetMusicRenderer(layout),
     );
   }
 }
